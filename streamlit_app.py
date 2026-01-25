@@ -10,7 +10,8 @@ URL = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
 # 2. AI CONFIG
 genai.configure(api_key=KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# UPDATED: Changed from gemini-1.5-flash to the stable 2.0 release
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 # 3. SHEET CONNECTION
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -37,23 +38,31 @@ if f_file and b_file:
 
                 # AI Request
                 res = model.generate_content([prompt, img_f, img_b])
-                raw = res.text.strip().split(",")
                 
-                # Create Row
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                row = [now] + [item.strip() for item in raw]
+                # Handling potential empty or malformed responses
+                if res.text:
+                    raw = res.text.strip().split(",")
+                    
+                    # Create Row
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    row = [now] + [item.strip() for item in raw]
+                    
+                    # Show Result
+                    cols = ["Date", "Player", "Sport", "Grade", "Growth"]
+                    # Ensure the AI returned exactly 4 items to match our 5 columns (Date + 4 items)
+                    if len(row) == len(cols):
+                        df_new = pd.DataFrame([row], columns=cols)
+                        st.table(df_new)
+                        
+                        # 6. SAVE TO SHEET
+                        old_df = conn.read(spreadsheet=URL)
+                        up_df = pd.concat([old_df, df_new], ignore_index=True)
+                        conn.update(spreadsheet=URL, data=up_df)
+                        st.success("Successfully Saved!")
+                        st.balloons()
+                    else:
+                        st.error("AI output format was unexpected. Please try scanning again.")
                 
-                # Show Result
-                cols = ["Date", "Player", "Sport", "Grade", "Growth"]
-                df_new = pd.DataFrame([row], columns=cols)
-                st.table(df_new)
-                
-                # 6. SAVE TO SHEET
-                old_df = conn.read(spreadsheet=URL)
-                up_df = pd.concat([old_df, df_new], ignore_index=True)
-                conn.update(spreadsheet=URL, data=up_df)
-                st.success("Successfully Saved!")
-                st.balloons()
-
             except Exception as e:
+                # This will now catch specific API issues if the 404 persists
                 st.error(f"Error: {e}")
