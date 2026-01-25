@@ -66,4 +66,4 @@ if front_file and back_file:
                 # 6. SAVE TO GOOGLE SHEETS
                 # Read existing data, combine with new row, and update the sheet
                 existing_df = conn.read(spreadsheet=SHEET_URL)
-                updated_df = pd.concat([existing
+                updated_df = pd.concat([existing_df, df_new], ignore_index=True)
