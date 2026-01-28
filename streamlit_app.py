@@ -5,9 +5,11 @@ from datetime import datetime
 import pandas as pd
 
 # 1. SETUP
-# Using the stable model identifier for 2026
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+
+# We are switching to the explicit 'models/' prefix which is required by some v1beta environments
+MODEL_NAME = 'models/gemini-1.5-flash'
+model = genai.GenerativeModel(MODEL_NAME)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. UI
@@ -23,11 +25,11 @@ with c2:
 # 3. LOGIC
 if f_img and b_img:
     if st.button("Analyze & Save to Sheet"):
-        with st.spinner("AI Scanning Card..."):
+        with st.spinner("AI Scanning..."):
             try:
-                # Prepare AI content for multimodal analysis
+                # Prepare AI content
                 content = [
-                    "Identify: Player Name, Sport, PSA Grade (1-10), Growth Potential. Return ONLY a comma-separated list.",
+                    "Identify: Player, Sport, PSA Grade (1-10), Potential. Return ONLY a comma-separated list.",
                     {"mime_type": "image/jpeg", "data": f_img.getvalue()},
                     {"mime_type": "image/jpeg", "data": b_img.getvalue()}
                 ]
@@ -40,25 +42,25 @@ if f_img and b_img:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 row = [now] + [item.strip() for item in data]
                 
-                # Table display
-                cols = ["Date", "Player", "Sport", "Grade", "Potential"]
-                df_new = pd.DataFrame([row], columns=cols)
+                # Display
+                df_new = pd.DataFrame([row], columns=["Date", "Player", "Sport", "Grade", "Potential"])
                 st.table(df_new)
                 
-                # 4. SAVE TO GOOGLE SHEETS
-                sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-                existing_df = conn.read(spreadsheet=sheet_url)
-                
-                # Ensure existing_df is not empty to prevent concat errors
-                if existing_df is not None:
-                    updated_df = pd.concat([existing_df, df_new], ignore_index=True)
-                else:
-                    updated_df = df_new
-                    
-                conn.update(spreadsheet=sheet_url, data=updated_df)
+                # 4. SAVE
+                url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+                existing_df = conn.read(spreadsheet=url)
+                updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+                conn.update(spreadsheet=url, data=updated_df)
                 
                 st.success("Successfully Saved!")
                 st.balloons()
 
             except Exception as e:
                 st.error(f"Analysis Error: {e}")
+                # DIAGNOSTIC: This helps us see exactly what your API key is allowed to use
+                st.write("Checking available models for your API key...")
+                try:
+                    available_models = [m.name for m in genai.list_models()]
+                    st.write("Your key can see these models:", available_models)
+                except:
+                    st.write("Could not retrieve model list. Check your API key permissions.")
