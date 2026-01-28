@@ -7,14 +7,15 @@ import pandas as pd
 # 1. SETUP
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# We are switching to the explicit 'models/' prefix which is required by some v1beta environments
-MODEL_NAME = 'models/gemini-1.5-flash'
+# UPGRADED MODEL: Using the specific path from your diagnostic list
+MODEL_NAME = 'models/gemini-3-flash-preview'
 model = genai.GenerativeModel(MODEL_NAME)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. UI
 st.set_page_config(page_title="Whatcha Ya Got", page_icon="🎴")
 st.title("🎴 Whatcha Ya Got")
+st.markdown("Analyzing with Gemini 3.0 Flash Technology")
 
 c1, c2 = st.columns(2)
 with c1:
@@ -25,7 +26,7 @@ with c2:
 # 3. LOGIC
 if f_img and b_img:
     if st.button("Analyze & Save to Sheet"):
-        with st.spinner("AI Scanning..."):
+        with st.spinner("Gemini 3.0 is examining the card..."):
             try:
                 # Prepare AI content
                 content = [
@@ -42,25 +43,24 @@ if f_img and b_img:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 row = [now] + [item.strip() for item in data]
                 
-                # Display
+                # Display Result
                 df_new = pd.DataFrame([row], columns=["Date", "Player", "Sport", "Grade", "Potential"])
                 st.table(df_new)
                 
-                # 4. SAVE
+                # 4. SAVE TO GOOGLE SHEETS
                 url = st.secrets["connections"]["gsheets"]["spreadsheet"]
                 existing_df = conn.read(spreadsheet=url)
-                updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+                
+                # Handle empty sheets or new sheets gracefully
+                if existing_df is not None and not existing_df.empty:
+                    updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+                else:
+                    updated_df = df_new
+                    
                 conn.update(spreadsheet=url, data=updated_df)
                 
-                st.success("Successfully Saved!")
+                st.success("Successfully Saved to Collection!")
                 st.balloons()
 
             except Exception as e:
                 st.error(f"Analysis Error: {e}")
-                # DIAGNOSTIC: This helps us see exactly what your API key is allowed to use
-                st.write("Checking available models for your API key...")
-                try:
-                    available_models = [m.name for m in genai.list_models()]
-                    st.write("Your key can see these models:", available_models)
-                except:
-                    st.write("Could not retrieve model list. Check your API key permissions.")
