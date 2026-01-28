@@ -5,9 +5,9 @@ from datetime import datetime
 import pandas as pd
 
 # 1. SETUP
-# Using the full model path to fix the 404 error
+# Using the stable model identifier for 2026
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. UI
@@ -25,7 +25,7 @@ if f_img and b_img:
     if st.button("Analyze & Save to Sheet"):
         with st.spinner("AI Scanning Card..."):
             try:
-                # Prepare AI content
+                # Prepare AI content for multimodal analysis
                 content = [
                     "Identify: Player Name, Sport, PSA Grade (1-10), Growth Potential. Return ONLY a comma-separated list.",
                     {"mime_type": "image/jpeg", "data": f_img.getvalue()},
@@ -48,7 +48,13 @@ if f_img and b_img:
                 # 4. SAVE TO GOOGLE SHEETS
                 sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
                 existing_df = conn.read(spreadsheet=sheet_url)
-                updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+                
+                # Ensure existing_df is not empty to prevent concat errors
+                if existing_df is not None:
+                    updated_df = pd.concat([existing_df, df_new], ignore_index=True)
+                else:
+                    updated_df = df_new
+                    
                 conn.update(spreadsheet=sheet_url, data=updated_df)
                 
                 st.success("Successfully Saved!")
