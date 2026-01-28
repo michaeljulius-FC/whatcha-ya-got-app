@@ -4,62 +4,55 @@ import google.generativeai as genai
 from datetime import datetime
 import pandas as pd
 
-# 1. AI CONFIGURATION
-# We use 'gemini-1.5-flash' for maximum compatibility with your new project
+# 1. SETUP
+# Using the full model path to fix the 404 error
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-# 2. GOOGLE SHEETS SETUP
+model = genai.GenerativeModel('models/gemini-1.5-flash')
 conn = st.connection("gsheets", type=GSheetsConnection)
-SHEET_URL = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
-# 3. USER INTERFACE
+# 2. UI
 st.set_page_config(page_title="Whatcha Ya Got", page_icon="🎴")
 st.title("🎴 Whatcha Ya Got")
-st.markdown("Scan your card's front and back to analyze and save.")
 
-col1, col2 = st.columns(2)
-with col1:
-    f_file = st.camera_input("Front", key="front")
-with col2:
-    b_file = st.camera_input("Back", key="back")
+c1, c2 = st.columns(2)
+with c1:
+    f_img = st.camera_input("Front", key="f")
+with c2:
+    b_img = st.camera_input("Back", key="b")
 
-# 4. ANALYSIS & SAVING
-if f_file and b_file:
+# 3. LOGIC
+if f_img and b_img:
     if st.button("Analyze & Save to Sheet"):
-        with st.spinner("AI is examining the card..."):
+        with st.spinner("AI Scanning Card..."):
             try:
-                # Prepare images for Gemini
-                img_f = {"mime_type": "image/jpeg", "data": f_file.getvalue()}
-                img_b = {"mime_type": "image/jpeg", "data": b_file.getvalue()}
+                # Prepare AI content
+                content = [
+                    "Identify: Player Name, Sport, PSA Grade (1-10), Growth Potential. Return ONLY a comma-separated list.",
+                    {"mime_type": "image/jpeg", "data": f_img.getvalue()},
+                    {"mime_type": "image/jpeg", "data": b_img.getvalue()}
+                ]
                 
-                prompt = "Return ONLY a comma-separated list: Name, Sport, Grade, Potential"
+                # AI Request
+                res = model.generate_content(content)
+                data = res.text.strip().split(",")
                 
-                # Get AI Response
-                response = model.generate_content([prompt, img_f, img_b])
-                ai_data = response.text.strip().split(",")
-                
-                # Format Data for Table
+                # Create Row
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_row = [now] + [item.strip() for item in ai_data]
+                row = [now] + [item.strip() for item in data]
                 
+                # Table display
                 cols = ["Date", "Player", "Sport", "Grade", "Potential"]
-                df_new = pd.DataFrame([new_row], columns=cols)
-                
-                # Show results in app
-                st.subheader("Analysis Results")
+                df_new = pd.DataFrame([row], columns=cols)
                 st.table(df_new)
                 
-                # 5. DATA SYNC (Sheet Handshake)
-                existing_df = conn.read(spreadsheet=SHEET_URL)
+                # 4. SAVE TO GOOGLE SHEETS
+                sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+                existing_df = conn.read(spreadsheet=sheet_url)
                 updated_df = pd.concat([existing_df, df_new], ignore_index=True)
-                conn.update(spreadsheet=SHEET_URL, data=updated_df)
+                conn.update(spreadsheet=sheet_url, data=updated_df)
                 
-                st.success("Successfully saved to your sheet!")
+                st.success("Successfully Saved!")
                 st.balloons()
 
             except Exception as e:
-                # This catches API issues, sheet issues, or formatting errors
                 st.error(f"Analysis Error: {e}")
-                st.info("Check your API key and ensure your Sheet is shared as 'Editor'.")
-                
